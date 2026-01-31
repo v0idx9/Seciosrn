@@ -264,7 +264,7 @@ def define_platform(conf):
 		])
 		conf.env.append_unique('INCLUDES', [
 			os.path.abspath('thirdparty/angle/include'),
-			'/opt/local/include'
+			#'/opt/local/include'
 		])
 		if not conf.env.IOS:
 			conf.env.append_unique('DEFINES', [
@@ -400,8 +400,8 @@ def check_deps(conf):
 		conf.env.FRAMEWORK_COREAUDIO = "CoreAudio"
 		conf.env.FRAMEWORK_AUDIOTOOLBOX = "AudioToolbox"
 		conf.env.FRAMEWORK_SYSTEMCONFIGURATION = "SystemConfiguration"
-		conf.check(lib='iconv', uselib_store='ICONV')
 		if not conf.env.IOS:
+			conf.check(lib='iconv', uselib_store='ICONV')
 			conf.env.FRAMEWORK_APPKIT = "AppKit"
 			conf.env.FRAMEWORK_CARBON = "Carbon"
 			conf.env.FRAMEWORK_OPENGL = "OpenGL"
