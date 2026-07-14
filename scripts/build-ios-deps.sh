@@ -208,6 +208,15 @@ build_libjpeg
 build_freetype
 build_curl
 build_sdl2
+
+# Bootstrap ANGLE when libEGL is not cached yet (fresh CI / first macOS build).
+if [ "${BUILD_ANGLE:-0}" != "1" ]; then
+	if [ ! -f "${OUT}/libEGL.a" ] && [ ! -f "${OUT}/libEGL.dylib" ]; then
+		echo "==> libEGL not found in ${OUT}; bootstrapping ANGLE" >&2
+		BUILD_ANGLE=1
+	fi
+fi
+
 build_angle || {
 	echo "WARNING: ANGLE build failed; engine can still be built without --angle." >&2
 }
