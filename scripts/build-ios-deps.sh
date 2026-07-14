@@ -16,7 +16,7 @@ CMAKE_IOS=(
 	-DCMAKE_POLICY_VERSION_MINIMUM=3.5
 )
 
-need_libs=(libz.a libbz2.a libpng.a libjpeg.a libfreetype2.a libcurl.a libSDL2.a)
+need_libs=(libz.a libbz2.a libpng.a libjpeg.a libfreetype2.a libcurl.a)
 all_present=true
 for lib in "${need_libs[@]}"; do
 	if [ ! -f "${OUT}/${lib}" ]; then
@@ -24,6 +24,13 @@ for lib in "${need_libs[@]}"; do
 		break
 	fi
 done
+if [ ! -f "${OUT}/libSDL2.dylib" ]; then
+	all_present=false
+fi
+if [ ! -f "${OUT}/libEGL.a" ] && [ ! -f "${OUT}/libEGL.dylib" ]; then
+	all_present=false
+fi
+
 if [ "${all_present}" = true ]; then
 	echo "All iOS deps already present in ${OUT}, skipping rebuild."
 	exit 0
