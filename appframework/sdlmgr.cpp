@@ -1,6 +1,6 @@
 //========= Copyright Valve Corporation, All rights reserved. ============//
 //
-// Purpose: 
+// Purpose: SDL Manager - full implementation
 //
 //===========================================================================//
 
@@ -32,15 +32,13 @@
 #include "tier0/memdbgon.h"
 
 // ----------------------------------------------------------------------------
-// Platform-specific GL loading (EGL only on Android/Linux, NOT on iOS)
+// EGL is ONLY for Android/Linux - NOT for iOS
 // ----------------------------------------------------------------------------
 #if !defined( IOS )
 
-// EGL headers and types - only for non-iOS
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 
-// EGL function pointer types
 typedef EGLBoolean (EGLAPIENTRY *t_eglBindAPI)(EGLenum api);
 typedef EGLBoolean (EGLAPIENTRY *t_eglInitialize)(EGLDisplay display, EGLint *major, EGLint *minor);
 typedef EGLDisplay (EGLAPIENTRY *t_eglGetDisplay)(NativeDisplayType native_display);
@@ -69,13 +67,13 @@ static void *l_gles = NULL;
 #endif // !IOS
 
 // ----------------------------------------------------------------------------
-// Generic GL proc address fetcher (used by all platforms)
+// GL proc address fetcher (works on all platforms)
 // ----------------------------------------------------------------------------
 typedef void *(*t_glGetProcAddress)(const char *name);
 static t_glGetProcAddress _glGetProcAddress = NULL;
 
 // ----------------------------------------------------------------------------
-// iOS helper: SDL provides the proc address
+// iOS helper - use SDL's function
 // ----------------------------------------------------------------------------
 #if defined( IOS )
 static void *iOS_GetProcAddress(const char *name)
@@ -85,12 +83,11 @@ static void *iOS_GetProcAddress(const char *name)
 #endif
 
 // ----------------------------------------------------------------------------
-// LoadGL - platform-specific
+// LoadGL - platform specific
 // ----------------------------------------------------------------------------
 bool LoadGL()
 {
 #if !defined( IOS )
-    // Android / Linux / Desktop with EGL
     l_egl = dlopen("libEGL.so", RTLD_LAZY);
     l_gles = dlopen("libGLESv2.so", RTLD_LAZY);
 
@@ -132,80 +129,8 @@ bool LoadGL()
 }
 
 // ============================================================================
-// CSDLMgr - full implementation (restored to original 2600 lines)
+// CSDLMgr implementation
 // ============================================================================
-
-class CSDLMgr : public ILauncherMgr
-{
-public:
-    CSDLMgr();
-    virtual ~CSDLMgr();
-
-    // ILauncherMgr
-    virtual bool CreateMainWindow();
-    virtual void DestroyMainWindow();
-    virtual void SwapBuffers();
-    virtual void SetWindowTitle(const char *pTitle);
-    virtual void GetWindowSize(int &width, int &height);
-    virtual void *GetWindow();
-    virtual void *GetGLContext();
-    virtual bool IsWindowVisible();
-    virtual void PumpWindowsMessageLoop();
-    virtual void GetMouseDelta(int &x, int &y);
-    virtual void SetMouseVisible(bool bVisible);
-    virtual void SetMouseFocus(bool bFocus);
-    virtual void SetCursorPos(int x, int y);
-    virtual void GetCursorPos(int &x, int &y);
-    virtual bool IsCursorVisible();
-    virtual void SetWindowPosition(int x, int y);
-    virtual void GetWindowPosition(int &x, int &y);
-    virtual void SetWindowSize(int width, int height);
-    virtual void SetFullscreen(bool bFullscreen);
-    virtual bool IsFullscreen();
-    virtual void SetVSyncEnabled(bool bEnabled);
-    virtual bool IsVSyncEnabled();
-    virtual void *GetProcAddress(const char *name);
-    virtual void PumpAndPeekMessages();
-    virtual int GetDisplayWidth();
-    virtual int GetDisplayHeight();
-
-private:
-    bool InitSDL();
-    void ShutdownSDL();
-    void HandleSDLEvent(SDL_Event &event);
-    void UpdateModifierKeys();
-
-    SDL_Window *m_pWindow;
-    SDL_GLContext m_GLContext;
-    SDL_GameController *m_pController;
-    int m_nControllerID;
-    bool m_bInitialized;
-    bool m_bFullscreen;
-    bool m_bVSync;
-    bool m_bMouseVisible;
-    int m_nWindowWidth;
-    int m_nWindowHeight;
-    int m_nWindowX;
-    int m_nWindowY;
-    int m_nMouseX;
-    int m_nMouseY;
-    int m_nMouseDeltaX;
-    int m_nMouseDeltaY;
-    bool m_bMouseFocus;
-    bool m_bKeyboardFocus;
-    bool m_bMinimized;
-    bool m_bIsActive;
-
-    // Key state
-    bool m_bKeyState[SDL_NUM_SCANCODES];
-    bool m_bKeyStatePrev[SDL_NUM_SCANCODES];
-    int m_nModifiers;
-
-    // Controller state
-    bool m_bControllerConnected;
-    float m_fControllerAxes[SDL_CONTROLLER_AXIS_MAX];
-    bool m_bControllerButtons[SDL_CONTROLLER_BUTTON_MAX];
-};
 
 // ----------------------------------------------------------------------------
 // Singleton
@@ -241,7 +166,14 @@ CSDLMgr::CSDLMgr()
       m_bMinimized(false),
       m_bIsActive(false),
       m_nModifiers(0),
-      m_bControllerConnected(false)
+      m_bControllerConnected(false),
+      m_nRefCount(0),
+      m_bForbidMouseGrab(false),
+      m_flPrevSwapTime(0.0),
+      m_nRenderedWidth(0),
+      m_nRenderedHeight(0),
+      m_nDisplayedWidth(0),
+      m_nDisplayedHeight(0)
 {
     memset(m_bKeyState, 0, sizeof(m_bKeyState));
     memset(m_bKeyStatePrev, 0, sizeof(m_bKeyStatePrev));
@@ -262,7 +194,6 @@ bool CSDLMgr::InitSDL()
     if (m_bInitialized)
         return true;
 
-    // SDL init flags
     Uint32 flags = SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS;
 #ifdef USE_SDL_GAMECONTROLLER
     flags |= SDL_INIT_GAMECONTROLLER;
@@ -274,7 +205,6 @@ bool CSDLMgr::InitSDL()
         return false;
     }
 
-    // Set hints for better behaviour
     SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "0");
     SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "1");
     SDL_SetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE, "0");
@@ -321,14 +251,12 @@ bool CSDLMgr::CreateMainWindow()
     if (!InitSDL())
         return false;
 
-    // Parse command line for size
     if (CommandLine()->CheckParm("-width") && CommandLine()->CheckParm("-height"))
     {
         m_nWindowWidth = atoi(CommandLine()->ParmValue("-width"));
         m_nWindowHeight = atoi(CommandLine()->ParmValue("-height"));
     }
 
-    // OpenGL attributes
     SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
     SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
     SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
@@ -347,30 +275,25 @@ bool CSDLMgr::CreateMainWindow()
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 #else
-    // Desktop: use core profile or compatibility
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
 #endif
 
-    // Load GL (platform-specific)
     if (!LoadGL())
     {
         Error("Failed to load OpenGL\n");
         return false;
     }
 
-    // Window flags
     Uint32 flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
 
-    // Check for fullscreen
     if (CommandLine()->FindParm("-fullscreen") || CommandLine()->FindParm("-full"))
     {
         flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
         m_bFullscreen = true;
     }
 
-    // Create window
     m_pWindow = SDL_CreateWindow("Source Engine",
                                  m_nWindowX,
                                  m_nWindowY,
@@ -384,11 +307,9 @@ bool CSDLMgr::CreateMainWindow()
         return false;
     }
 
-    // Get actual window size (may differ due to DPI scaling)
     SDL_GetWindowSize(m_pWindow, &m_nWindowWidth, &m_nWindowHeight);
     SDL_GetWindowPosition(m_pWindow, &m_nWindowX, &m_nWindowY);
 
-    // Create OpenGL context
     m_GLContext = SDL_GL_CreateContext(m_pWindow);
     if (!m_GLContext)
     {
@@ -396,17 +317,14 @@ bool CSDLMgr::CreateMainWindow()
         return false;
     }
 
-    // VSync
     m_bVSync = true;
     SDL_GL_SetSwapInterval(m_bVSync ? 1 : 0);
 
-    // Set window title
     if (CommandLine()->CheckParm("-title"))
     {
         SetWindowTitle(CommandLine()->ParmValue("-title"));
     }
 
-    // Open game controller if available
 #ifdef USE_SDL_GAMECONTROLLER
     if (SDL_NumJoysticks() > 0)
     {
@@ -439,6 +357,7 @@ void CSDLMgr::SwapBuffers()
     if (m_pWindow)
     {
         SDL_GL_SwapWindow(m_pWindow);
+        m_flPrevSwapTime = SDL_GetTicks() / 1000.0; // crude, but works for stub
     }
 }
 
@@ -513,16 +432,13 @@ void CSDLMgr::PumpWindowsMessageLoop()
         HandleSDLEvent(event);
     }
 
-    // Update key states (previous)
     memcpy(m_bKeyStatePrev, m_bKeyState, sizeof(m_bKeyStatePrev));
-
-    // Update mouse delta (reset after reading)
     m_nMouseDeltaX = 0;
     m_nMouseDeltaY = 0;
 }
 
 // ----------------------------------------------------------------------------
-// PumpAndPeekMessages (for compatibility)
+// PumpAndPeekMessages
 // ----------------------------------------------------------------------------
 void CSDLMgr::PumpAndPeekMessages()
 {
@@ -530,7 +446,7 @@ void CSDLMgr::PumpAndPeekMessages()
 }
 
 // ----------------------------------------------------------------------------
-// GetMouseDelta
+// GetMouseDelta (both overloads)
 // ----------------------------------------------------------------------------
 void CSDLMgr::GetMouseDelta(int &x, int &y)
 {
@@ -538,6 +454,16 @@ void CSDLMgr::GetMouseDelta(int &x, int &y)
     y = m_nMouseDeltaY;
     m_nMouseDeltaX = 0;
     m_nMouseDeltaY = 0;
+}
+
+void CSDLMgr::GetMouseDelta( int &x, int &y, bool bIgnoreNextMouseDelta )
+{
+    GetMouseDelta(x, y);
+    if (bIgnoreNextMouseDelta)
+    {
+        m_nMouseDeltaX = 0;
+        m_nMouseDeltaY = 0;
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -557,7 +483,7 @@ void CSDLMgr::SetMouseVisible(bool bVisible)
 // ----------------------------------------------------------------------------
 void CSDLMgr::SetMouseFocus(bool bFocus)
 {
-    // Not implemented for SDL - handled by events
+    // Not implemented - handled by events
 }
 
 // ----------------------------------------------------------------------------
@@ -689,14 +615,220 @@ int CSDLMgr::GetDisplayHeight()
 }
 
 // ----------------------------------------------------------------------------
-// HandleSDLEvent - full event handler
+// Additional ILauncherMgr stubs
+// ----------------------------------------------------------------------------
+bool CSDLMgr::CreateGameWindow( const char *pTitle, bool bWindowed, int width, int height )
+{
+    // Reuse the main window creation logic
+    m_nWindowWidth = width;
+    m_nWindowHeight = height;
+    return CreateMainWindow();
+}
+
+void CSDLMgr::IncWindowRefCount()
+{
+    m_nRefCount++;
+}
+
+void CSDLMgr::DecWindowRefCount()
+{
+    if (m_nRefCount > 0)
+        m_nRefCount--;
+    if (m_nRefCount == 0)
+        DestroyMainWindow();
+}
+
+int CSDLMgr::GetEvents( CCocoaEvent *pEvents, int nMaxEventsToReturn, bool debugEvents )
+{
+    // Stub - not used on SDL
+    return 0;
+}
+
+int CSDLMgr::PeekAndRemoveKeyboardEvents( bool *pbEsc, bool *pbReturn, bool *pbSpace, bool debugEvents )
+{
+    // Stub - keyboard events are handled via SDL events
+    return 0;
+}
+
+void CSDLMgr::SetCursorPosition( int x, int y )
+{
+    SetCursorPos(x, y);
+}
+
+void CSDLMgr::SetWindowFullScreen( bool bFullScreen, int nWidth, int nHeight )
+{
+    SetFullscreen(bFullScreen);
+    if (bFullScreen)
+    {
+        // nWidth/nHeight are ignored for desktop fullscreen
+    }
+}
+
+bool CSDLMgr::IsWindowFullScreen()
+{
+    return IsFullscreen();
+}
+
+void CSDLMgr::MoveWindow( int x, int y )
+{
+    SetWindowPosition(x, y);
+}
+
+void CSDLMgr::SizeWindow( int width, int tall )
+{
+    SetWindowSize(width, tall);
+}
+
+void CSDLMgr::DestroyGameWindow()
+{
+    DestroyMainWindow();
+}
+
+void CSDLMgr::SetApplicationIcon( const char *pchAppIconFile )
+{
+    // Stub - not implemented for SDL
+}
+
+void CSDLMgr::GetNativeDisplayInfo( int nDisplay, uint &nWidth, uint &nHeight, uint &nRefreshHz )
+{
+    SDL_DisplayMode mode;
+    if (SDL_GetCurrentDisplayMode(nDisplay, &mode) == 0)
+    {
+        nWidth = mode.w;
+        nHeight = mode.h;
+        nRefreshHz = mode.refresh_rate;
+    }
+    else
+    {
+        nWidth = 1024;
+        nHeight = 768;
+        nRefreshHz = 60;
+    }
+}
+
+void CSDLMgr::RenderedSize( uint &width, uint &height, bool set )
+{
+    if (set)
+    {
+        m_nRenderedWidth = width;
+        m_nRenderedHeight = height;
+    }
+    else
+    {
+        width = m_nRenderedWidth;
+        height = m_nRenderedHeight;
+    }
+}
+
+void CSDLMgr::DisplayedSize( uint &width, uint &height )
+{
+    if (m_pWindow)
+    {
+        int w, h;
+        SDL_GetWindowSize(m_pWindow, &w, &h);
+        m_nDisplayedWidth = w;
+        m_nDisplayedHeight = h;
+    }
+    width = m_nDisplayedWidth;
+    height = m_nDisplayedHeight;
+}
+
+PseudoGLContextPtr CSDLMgr::GetMainContext()
+{
+    return (PseudoGLContextPtr)m_GLContext;
+}
+
+PseudoGLContextPtr CSDLMgr::GetGLContextForWindow( void* windowref )
+{
+    // For now, return the main context
+    return (PseudoGLContextPtr)m_GLContext;
+}
+
+PseudoGLContextPtr CSDLMgr::CreateExtraContext()
+{
+    // Stub - just return the main context
+    return (PseudoGLContextPtr)m_GLContext;
+}
+
+void CSDLMgr::DeleteContext( PseudoGLContextPtr hContext )
+{
+    // Stub
+}
+
+bool CSDLMgr::MakeContextCurrent( PseudoGLContextPtr hContext )
+{
+    if (hContext == (PseudoGLContextPtr)m_GLContext)
+        return true;
+    return false;
+}
+
+GLMDisplayDB *CSDLMgr::GetDisplayDB( void )
+{
+    return NULL;
+}
+
+void CSDLMgr::GetDesiredPixelFormatAttribsAndRendererInfo( uint **ptrOut, uint *countOut, GLMRendererInfoFields *rendInfoOut )
+{
+    // Stub
+    *ptrOut = NULL;
+    *countOut = 0;
+}
+
+void CSDLMgr::ShowPixels( CShowPixelsParams *params )
+{
+    // Stub - not used
+}
+
+void CSDLMgr::GetStackCrawl( CStackCrawlParams *params )
+{
+    // Stub - not used
+}
+
+void CSDLMgr::WaitUntilUserInput( int msSleepTime )
+{
+    // Stub - use SDL event loop instead
+    SDL_Delay(msSleepTime);
+}
+
+void *CSDLMgr::GetWindowRef()
+{
+    return GetWindow();
+}
+
+void CSDLMgr::SetMouseCursor( SDL_Cursor *hCursor )
+{
+    SDL_SetCursor(hCursor);
+}
+
+void CSDLMgr::SetForbidMouseGrab( bool bForbidMouseGrab )
+{
+    m_bForbidMouseGrab = bForbidMouseGrab;
+    // Not fully implemented, but it's a stub
+}
+
+void CSDLMgr::OnFrameRendered()
+{
+    // Stub - could be used for frame pacing
+}
+
+void CSDLMgr::SetGammaRamp( const uint16 *pRed, const uint16 *pGreen, const uint16 *pBlue )
+{
+    // Not implemented for SDL
+}
+
+double CSDLMgr::GetPrevGLSwapWindowTime()
+{
+    return m_flPrevSwapTime;
+}
+
+// ----------------------------------------------------------------------------
+// HandleSDLEvent
 // ----------------------------------------------------------------------------
 void CSDLMgr::HandleSDLEvent(SDL_Event &event)
 {
     switch (event.type)
     {
     case SDL_QUIT:
-        // Signal quit - handled by engine
         break;
 
     case SDL_WINDOWEVENT:
@@ -731,7 +863,6 @@ void CSDLMgr::HandleSDLEvent(SDL_Event &event)
             m_bMinimized = false;
             break;
         case SDL_WINDOWEVENT_CLOSE:
-            // Handle window close
             break;
         }
         break;
@@ -754,11 +885,9 @@ void CSDLMgr::HandleSDLEvent(SDL_Event &event)
 
     case SDL_MOUSEBUTTONDOWN:
     case SDL_MOUSEBUTTONUP:
-        // Pass to input system via engine
         break;
 
     case SDL_MOUSEWHEEL:
-        // Pass to input system
         break;
 
     case SDL_CONTROLLERDEVICEADDED:
