@@ -119,11 +119,12 @@ void IOS_LaunchDialog( void )
 	g_iOSVer = [ver floatValue];
 
 	char exec_dir[PATH_MAX];
+	char extras_path[PATH_MAX];
 	strcpy(exec_dir, IOS_GetExecDir());
 	setenv("APP_LIB_PATH", exec_dir, 1);
 	setenv("APP_MOD_LIB", exec_dir, 1);
-	strcat(exec_dir, "/extras_dir.vpk");
-	setenv("EXTRAS_VPK_PATH", exec_dir, 1);
+	snprintf(extras_path, sizeof(extras_path), "%s/extras_dir.vpk", IOS_GetExecDir());
+	setenv("EXTRAS_VPK_PATH", extras_path, 1);
 	setenv("VALVE_GAME_PATH", IOS_GetDocsDir(), 1);
 
 	//request microphone permissions otherwise we will crash when joining an online server
@@ -228,7 +229,7 @@ void IOS_LaunchDialog( void )
 	}
 	szArgc = count + 1;
 	szArgv[count + 1] = 0;
-	szArgv[0] = exec_dir;
+	szArgv[0] = strdup(IOS_GetExecDir());
 
 	alert.delegate = nil;
 
@@ -247,4 +248,5 @@ int IOS_GetArgs( char ***out )
 		*out = szArgv;
 		return szArgc;
 	}
+	return 0;
 }

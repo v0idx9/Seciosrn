@@ -6,7 +6,7 @@
 
 #ifdef USE_SDL
 #include "SDL.h"
-#include "SDL_opengl.h"
+#include "togl/linuxwin/togl_sdl_gl.h"
 #endif
 
 #include "appframework/ilaunchermgr.h"

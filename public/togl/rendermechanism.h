@@ -34,7 +34,7 @@
 
 #undef PROTECTED_THINGS_ENABLE
 
-#include "SDL_opengl.h"
+#include "togl/linuxwin/togl_sdl_gl.h"
 #include "tier0/basetypes.h"
 #include "tier0/platform.h"
 
