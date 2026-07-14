@@ -19,32 +19,32 @@ public:
     virtual ~CSDLMgr();
 
     // ILauncherMgr interface
-    virtual bool CreateMainWindow() override;
-    virtual void DestroyMainWindow() override;
-    virtual void SwapBuffers() override;
-    virtual void SetWindowTitle(const char *pTitle) override;
-    virtual void GetWindowSize(int &width, int &height) override;
-    virtual void *GetWindow() override;
-    virtual void *GetGLContext() override;
-    virtual bool IsWindowVisible() override;
-    virtual void PumpWindowsMessageLoop() override;
-    virtual void GetMouseDelta(int &x, int &y) override;
-    virtual void SetMouseVisible(bool bVisible) override;
-    virtual void SetMouseFocus(bool bFocus) override;
-    virtual void SetCursorPos(int x, int y) override;
-    virtual void GetCursorPos(int &x, int &y) override;
-    virtual bool IsCursorVisible() override;
-    virtual void SetWindowPosition(int x, int y) override;
-    virtual void GetWindowPosition(int &x, int &y) override;
-    virtual void SetWindowSize(int width, int height) override;
-    virtual void SetFullscreen(bool bFullscreen) override;
-    virtual bool IsFullscreen() override;
-    virtual void SetVSyncEnabled(bool bEnabled) override;
-    virtual bool IsVSyncEnabled() override;
-    virtual void *GetProcAddress(const char *name) override;
-    virtual void PumpAndPeekMessages() override;
-    virtual int GetDisplayWidth() override;
-    virtual int GetDisplayHeight() override;
+    virtual bool CreateMainWindow();
+    virtual void DestroyMainWindow();
+    virtual void SwapBuffers();
+    virtual void SetWindowTitle(const char *pTitle);
+    virtual void GetWindowSize(int &width, int &height);
+    virtual void *GetWindow();
+    virtual void *GetGLContext();
+    virtual bool IsWindowVisible();
+    virtual void PumpWindowsMessageLoop();
+    virtual void GetMouseDelta(int &x, int &y);
+    virtual void SetMouseVisible(bool bVisible);
+    virtual void SetMouseFocus(bool bFocus);
+    virtual void SetCursorPos(int x, int y);
+    virtual void GetCursorPos(int &x, int &y);
+    virtual bool IsCursorVisible();
+    virtual void SetWindowPosition(int x, int y);
+    virtual void GetWindowPosition(int &x, int &y);
+    virtual void SetWindowSize(int width, int height);
+    virtual void SetFullscreen(bool bFullscreen);
+    virtual bool IsFullscreen();
+    virtual void SetVSyncEnabled(bool bEnabled);
+    virtual bool IsVSyncEnabled();
+    virtual void *GetProcAddress(const char *name);
+    virtual void PumpAndPeekMessages();
+    virtual int GetDisplayWidth();
+    virtual int GetDisplayHeight();
 };
 
 // ----------------------------------------------------------------------------
