@@ -20,7 +20,7 @@ public:
     CSDLMgr();
     virtual ~CSDLMgr();
 
-    // ---- ILauncherMgr interface ----
+    // ---- ILauncherMgr interface (window/context) ----
     virtual bool CreateMainWindow();
     virtual void DestroyMainWindow();
     virtual void SwapBuffers();
@@ -48,13 +48,13 @@ public:
     virtual int GetDisplayWidth();
     virtual int GetDisplayHeight();
 
-    // ---- Additional pure virtual functions from ILauncherMgr ----
+    // ---- Additional ILauncherMgr functions ----
     virtual bool CreateGameWindow( const char *pTitle, bool bWindowed, int width, int height );
     virtual void IncWindowRefCount();
     virtual void DecWindowRefCount();
     virtual int GetEvents( CCocoaEvent *pEvents, int nMaxEventsToReturn, bool debugEvents = false );
     virtual int PeekAndRemoveKeyboardEvents( bool *pbEsc, bool *pbReturn, bool *pbSpace, bool debugEvents = false );
-    virtual void SetCursorPosition( int x, int y );          // alias for SetCursorPos
+    virtual void SetCursorPosition( int x, int y );
     virtual void SetWindowFullScreen( bool bFullScreen, int nWidth, int nHeight );
     virtual bool IsWindowFullScreen();
     virtual void MoveWindow( int x, int y );
@@ -75,12 +75,19 @@ public:
     virtual void ShowPixels( CShowPixelsParams *params );
     virtual void GetStackCrawl( CStackCrawlParams *params );
     virtual void WaitUntilUserInput( int msSleepTime );
-    virtual void *GetWindowRef();                            // alias for GetWindow
+    virtual void *GetWindowRef();
     virtual void SetMouseCursor( SDL_Cursor *hCursor );
     virtual void SetForbidMouseGrab( bool bForbidMouseGrab );
     virtual void OnFrameRendered();
     virtual void SetGammaRamp( const uint16 *pRed, const uint16 *pGreen, const uint16 *pBlue );
     virtual double GetPrevGLSwapWindowTime();
+
+    // ---- IAppSystem (from ILauncherMgr) ----
+    virtual bool Connect( CreateInterfaceFn factory );
+    virtual void Disconnect();
+    virtual void *QueryInterface( const char *pInterfaceName );
+    virtual InitReturnVal_t Init();
+    virtual void Shutdown();
 
 private:
     bool InitSDL();
@@ -118,7 +125,7 @@ private:
     float m_fControllerAxes[SDL_CONTROLLER_AXIS_MAX];
     bool m_bControllerButtons[SDL_CONTROLLER_BUTTON_MAX];
 
-    // ---- Additional state for stubs ----
+    // ---- Additional state ----
     int m_nRefCount;
     bool m_bForbidMouseGrab;
     double m_flPrevSwapTime;
