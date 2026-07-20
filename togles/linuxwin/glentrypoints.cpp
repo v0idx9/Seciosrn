@@ -206,6 +206,20 @@ void ToGLDisconnectLibraries()
 
 #define GLVERNUM(Major, Minor, Patch) (((Major) * 100000) + ((Minor) * 1000) + (Patch))
 
+// An ES context reports GL_VERSION as "OpenGL ES <major>.<minor>[.<patch>] ...",
+// which lives in a different version namespace than desktop GL.
+static bool IsOpenGLES()
+{
+	static CDynamicFunctionOpenGL< true, const GLubyte *( _APIENTRY *)(GLenum name), const GLubyte * > glGetString("glGetString");
+	if (glGetString)
+	{
+		const char *version = (const char *) glGetString(GL_VERSION);
+		if (version && strstr(version, "OpenGL ES"))
+			return true;
+	}
+	return false;
+}
+
 static void GetOpenGLVersion(int *major, int *minor, int *patch)
 {
 	*major = *minor = *patch = 0;
@@ -252,8 +266,11 @@ static int GetOpenGLVersionPatch()
 
 static bool CheckBaseOpenGLVersion()
 {
+	// This is the GLES backend, so an ES context is the expected case: ES 3.0 is
+	// the floor it targets. Only a desktop GL context needs the 3.2 requirement.
+	const bool bIsES = IsOpenGLES();
 	const int NEED_MAJOR = 3;
-	const int NEED_MINOR = 2;
+	const int NEED_MINOR = bIsES ? 0 : 2;
 	const int NEED_PATCH = 0;
 
 	int major, minor, patch;
@@ -263,8 +280,8 @@ static bool CheckBaseOpenGLVersion()
 	const int have = GLVERNUM(major, minor, patch);
 	if (have < need)
 	{
-		Warning("PROBLEM: You appear to have OpenGL %d.%d.%d, but we need at least %d.%d.%d!\n",
-			major, minor, patch, NEED_MAJOR, NEED_MINOR, NEED_PATCH);
+		Warning("PROBLEM: You appear to have OpenGL%s %d.%d.%d, but we need at least %d.%d.%d!\n",
+			bIsES ? " ES" : "", major, minor, patch, NEED_MAJOR, NEED_MINOR, NEED_PATCH);
 		return false;
 	}
 	return true;
