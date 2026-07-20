@@ -184,7 +184,10 @@ build_angle() {
 		git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git "${depot_tools}"
 	fi
 	export PATH="${depot_tools}:${PATH}"
-	export DEPOT_TOOLS_UPDATE=0
+	# Let depot_tools self-bootstrap: it writes python3_bin_reldir.txt on first
+	# run, which gclient's siso hook requires. Pinning DEPOT_TOOLS_UPDATE=0 here
+	# skips that and the sync fails at configure_siso.py.
+	gclient --version >/dev/null 2>&1 || true
 
 	if [ ! -d "${angle_src}/.git" ]; then
 		git clone https://chromium.googlesource.com/angle/angle.git "${angle_src}"
