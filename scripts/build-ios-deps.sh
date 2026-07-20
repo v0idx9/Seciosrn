@@ -198,7 +198,8 @@ build_angle() {
 	gclient sync -D --force --no-history
 
 	# ios_enable_code_signing=false: we sign the .app ourselves at packaging time.
-	gn gen "${angle_build}" --args="target_os=\"ios\" target_cpu=\"arm64\" ios_deployment_target=\"${IOS_MIN_VERSION}\" is_debug=false ios_enable_code_signing=false angle_enable_metal=true angle_enable_vulkan=false angle_enable_gl=false angle_enable_null=false angle_enable_swiftshader=false angle_build_tests=false"
+	# target_environment is mandatory for target_os="ios" (build/config/apple/mobile_config.gni).
+	gn gen "${angle_build}" --args="target_os=\"ios\" target_cpu=\"arm64\" target_environment=\"device\" ios_deployment_target=\"${IOS_MIN_VERSION}\" is_debug=false ios_enable_code_signing=false use_siso=false angle_enable_metal=true angle_enable_vulkan=false angle_enable_gl=false angle_enable_null=false angle_enable_swiftshader=false angle_build_tests=false"
 
 	autoninja -C "${angle_build}" libEGL libGLESv2
 
